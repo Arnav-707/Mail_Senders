@@ -38,7 +38,7 @@ async function sendPersonalizedEmails() {
 
     let contacts;
     try {
-        const workbook = xlsx.readFile('contacts.xlsx');
+        const workbook = xlsx.readFile('Contacts.xlsx');
         contacts = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
         console.log(`Found ${contacts.length} contacts to process.`);
     } catch (error) {
@@ -162,7 +162,7 @@ app.get('/send-now', (req, res) => {
 
 
 console.log('Scheduling the daily email job...');
-cron.schedule('0 12 * * *', () => {
+cron.schedule('* * * * *', () => {
     if (isSending) {
         console.log('CRON JOB: Skipped because a sending process was already running.');
         return;
