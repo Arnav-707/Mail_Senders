@@ -50,13 +50,11 @@ async function sendPersonalizedEmails() {
     for (const contact of contacts) {
         let { Name, Email, Designation, Persona } = contact;
 
-        // --- Change 1: Skip if Email is missing ---
         if (!Email || typeof Email !== 'string' || !Email.includes('@')) {
             console.warn(`- Skipping contact "${Name || 'Unknown'}" due to missing or invalid email address.`);
             continue;
         }
 
-        // --- Change 2: Fallback logic for Persona and Designation ---
         if (!Persona && Designation) {
             console.log(`- Persona not found for ${Name}. Using Designation "${Designation}" as fallback.`);
             Persona = Designation;
@@ -70,9 +68,9 @@ async function sendPersonalizedEmails() {
         
         console.log(`\nProcessing contact: ${Name} (${Email})`);
         
-        const emailHtmlBody = await generateEmailContent(Name, Designation, Persona);
+        const emailContent = await generateEmailContent(Name, Designation, Persona);
 
-        if (!emailHtmlBody) {
+        if (!emailContent) {
             console.error(`- Failed to generate email content for ${Name}. Skipping.`);
             continue;
         }
@@ -80,10 +78,9 @@ async function sendPersonalizedEmails() {
         const mailOptions = {
             from: `"${YOUR_NAME}" <${SENDER_EMAIL}>`,
             to: Email,
-            // --- Change 3: Add the CC email addresses ---
             cc: CC_EMAILS, 
-            subject: `An Invitation to ${EVENT_NAME}`,
-            html: emailHtmlBody,
+            subject: emailContent.subject,
+            html: emailContent.body,
             attachments: [{
                 filename: 'invitation-poster.png',
                 path: POSTER_IMAGE_PATH
@@ -92,7 +89,7 @@ async function sendPersonalizedEmails() {
 
         try {
             await transporter.sendMail(mailOptions);
-            console.log(`✅ Successfully sent email to ${Name}.`);
+            console.log(`✅ Successfully sent email to ${Name} with subject: "${emailContent.subject}"`);
         } catch (error) {
             console.error(`❌ Failed to send email to ${Name}. Error: ${error.message}`);
         }
@@ -103,52 +100,71 @@ async function sendPersonalizedEmails() {
     console.log('\n--- Email Sending Process Finished ---');
 }
 
-// --- AI Content Generation Function (Updated with fixes) ---
+// --- AI Content Generation Function (Updated with new offer logic) ---
 async function generateEmailContent(name, designation, persona) {
     const prompt = `
     You are Arnav Agarwal, a Developer Advocate at Hackingly. Your tone is warm, respectful, and like a genuine peer reaching out—not a marketer.
 
-    Write a personalized HTML email to ${name}. Their current role is ${designation}. The goal is to invite them to our exclusive online event, "${EVENT_NAME}", on ${EVENT_DATE}.
+    Your task is to generate a personalized email for ${name}, whose role is ${designation}. The goal is to invite them to our exclusive online event, "${EVENT_NAME}", on ${EVENT_DATE}.
 
-    **You must follow the structure of the reference email meticulously for all personas.** The output should be a clean HTML block ready to be sent.
+    **Your response MUST be a valid JSON object with two keys: "subject" and "body".**
 
-    **Instructions for the email structure (Follow this order and style exactly):**
-    1.  **Greeting:** Start with "Dear ${name}," on its own line. Use a paragraph tag with a dark text color for dark mode compatibility. Example: "<p style="color:#333333;">Dear ${name},</p>"
+    **Instructions for the "subject" key:**
+    - Create a short, compelling, and unique subject line (under 10 words).
+    - It must be personalized to the recipient's role.
+    - Do NOT use generic words like "Invitation," "Free," "Offer," or "Event."
+    - Good examples: "A new approach to tech hiring at Decoded" for HR, or "Decoded by Hackingly | Tools for scaling your startup" for a Founder.
 
-    2.  **Introduction & Personalization:** Combine your intro and personalization into a single paragraph. Apply the dark text color. Example: "<p style="color:#333333;">My name is Arnav Agarwal, and I'm a Developer Advocate at Hackingly. I'm reaching out to leaders and innovators in the tech space, and your work as a ${designation} particularly stood out.</p>"
+    **Instructions for the "body" key:**
+    - The value should be a clean HTML block for the email body.
+    - Follow the structure of the reference email meticulously for all personas.
+    - **Greeting:** Start with "Dear ${name},". Use paragraph tags with "color:#333333;" for dark mode.
+    - **Introduction & Personalization:** Combine your intro and a personalization related to their ${designation}.
+    - **The Invitation:** Clearly invite them to the event.
+    - **About the Event:** Briefly explain 'Decoded'.
+    - **Benefits for You:** A personalized section based on their '${persona}' with a clear heading.
+        - **If persona is "HR":** Describe running hiring sprints and skill assessments. Offer "1 free hiring challenge with analytics + backend support."
+        - **If persona is "TPO":** Describe streamlining campus placements. Offer a "free campus hiring challenge."
+        - **If persona is "Program Manager" or "College SPOC":** Describe running hackathons and bootcamps. Offer a "Free event (hackathon, bootcamp, demo day) + event planning template access."
+        - **If persona is "Founder":** Describe hiring tech talent and testing ideas. Offer "One branded campaign or challenge + spotlight in Hackingly newsletter."
+    - **Comprehensive Benefits Section:** A bulleted list with the heading "A Glimpse of What We Offer Across the Ecosystem:". Reorder the list to put the most relevant benefit for their persona FIRST.
+        - Run hiring sprints & launch skill-based assessments.
+        - Run end-to-end hackathons, bootcamps, and pitch days.
+        - Hire tech talent, test product ideas, and build their brand via developer events.
+        - Conduct large-scale skill assessments and streamline campus placements.
+    - **Call to Action:** A styled HTML button with the link "https://www.hackingly.in/events/decoded-by-hackingly?utm=CG5BvanSGWn".
+    - **Closing and Sign Off (Combined):** Combine the closing and sign-off into a single paragraph tag. Start with a unique sentence based on their persona. After the unique sentence, add two line breaks (<br><br>) followed by the full signature.
+        - The full signature must be:
+          Best,<br>
+          ${YOUR_NAME}<br>
+          ${YOUR_JOB_TITLE}<br>
+          ${YOUR_COMPANY}<br>
+          8290590066
+        - The final HTML for a Founder must look like this: "<p style='color:#333333;'>As a fellow builder, I'm particularly excited to hear your thoughts on building innovative products. We believe the future is built together, and we'd be honored to have you be a part of it.<br><br>Best,<br>${YOUR_NAME}<br>${YOUR_JOB_TITLE}<br>${YOUR_COMPANY}<br>8290590066</p>"
 
-    3.  **The Invitation:** In a new paragraph, clearly invite them to the event. Apply the dark text color. Example: "<p style="color:#333333;">I'd like to personally invite you to our exclusive online event, <strong>${EVENT_NAME}</strong>, happening on ${EVENT_DATE}.</p>"
-    
-    4.  **About the Event:** In a new paragraph, briefly explain what the event is about. Apply the dark text color. Example: "<p style="color:#333333;">'Decoded' is our flagship event where we unveil the latest tools and platforms designed to help companies build, hire, and grow their tech ecosystems.</p>"
-
-    5.  **Benefits for You (Personalized Section):** Based on their persona, '${persona}', explain the specific value *for them*. Use a clear heading like "<h4 style="color:#111111;">Here’s what’s in it for you as a ${designation}:</h4>". Then, in a single paragraph with the dark text color, describe the pitch and offer naturally.
-        - **If persona is "HR":** Describe how they can run hiring sprints and skill assessments, and mention their exclusive offer of "a free hiring challenge with full analytics and backend support."
-        - **If persona is "Program Manager":** Describe how they can run hackathons and bootcamps, and mention their exclusive offer of "a free event of their choice on our platform, plus access to our event planning templates."
-        - **If persona is "Founder":** Describe how they can hire tech talent and test ideas, and mention their exclusive offer of "one branded campaign or hiring challenge, plus a feature in the Hackingly newsletter."
-        - **If persona is "College SPOC/TPO":** Describe how they can run skill assessments for students, and mention their exclusive offer of "one free campus hiring challenge or a skill-building hackathon for their students."
-
-    6.  **Comprehensive Benefits Section:** After the personalized pitch, add a new section with the heading "<h4 style="color:#111111;">A Glimpse of What We Offer Across the Ecosystem:</h4>". Under this heading, create a bulleted list (<ul> and <li style="color:#333333;"> tags). **Crucially, make the list item that is most relevant to the recipient's persona bold by wrapping it in <strong> tags.**
-        - For an HR persona, the list would be: <li><strong>Run hiring sprints & launch skill-based assessments.</strong></li><li>Run end-to-end hackathons, bootcamps, and pitch days.</li><li>Hire tech talent, test product ideas, and build their brand via developer events.</li><li>Conduct large-scale skill assessments and streamline campus placements.</li>
-        - For a Founder persona, the third item would be bold, etc.
-
-    7.  **Call to Action:** After the benefits list, add a clear call to action with the registration link. It should be a styled HTML button. The link is "https://www.hackingly.in/events/decoded-by-hackingly?utm=CG5BvanSGWn".
-        The HTML for the button must be:
-        "<p style='text-align:center; margin: 30px 0;'><a href='https://www.hackingly.in/events/decoded-by-hackingly?utm=CG5BvanSGWn' target='_blank' style='background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;'>Register for Decoded</a></p>"
-
-    8.  **Closing:** End with a personal closing. Apply the dark text color. Example: "<p style="color:#333333;">I'd genuinely be thrilled to see you there and connect personally. We believe the future is built together, and we'd be honored to have you be a part of it.</p>"
-
-    9.  **Sign Off:** Sign off with your name, title, and company. Apply the dark text color. Example: "<p style="color:#333333;">Best,<br>${YOUR_NAME}<br>${YOUR_JOB_TITLE}<br>${YOUR_COMPANY}</p>"
-
-    Format the entire response as a single block of HTML. Do not include a P.S., <html>, <body>, or any image tags. The poster will be a separate attachment.
+    Example of a valid JSON response:
+    {
+      "subject": "A thought for you as a Founder",
+      "body": "<p style='color:#333333;'>Dear Arnav,</p>..."
+    }
     `;
     try {
         const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
             model: "openai/gpt-3.5-turbo",
             messages: [{ role: "user", content: prompt }]
         }, { headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}` } });
-        return response.data.choices[0].message.content.trim();
+        
+        const content = response.data.choices[0].message.content.trim();
+        // --- Parse the JSON response from the AI ---
+        const parsedContent = JSON.parse(content);
+        if (parsedContent.subject && parsedContent.body) {
+            return parsedContent;
+        }
+        console.error(`- AI response for ${name} was missing subject or body.`);
+        return null;
+
     } catch (error) {
-        console.error(`- OpenRouter API request failed for ${name}:`, error.response ? error.response.data.error.message : "An unknown API error occurred");
+        console.error(`- OpenRouter API request or JSON parsing failed for ${name}:`, error.message);
         return null;
     }
 }
